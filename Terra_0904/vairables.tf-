@@ -1,0 +1,143 @@
+# variable "변수명" {
+#   description = "설명"
+#   type = string | number | bool(true|false)
+#   default = "기본값"
+# }
+# string: 문자열, 숫자는 문자열로 바꿔서 출력 ex) 100 -> "100"
+# number: 숫자를 문자열로 입력해도 숫자로 출력 ex) "100" -> 100
+# bool: true/false만 가능, 0/1 못받음, 소문자만 가능
+
+variable "region" {
+  description = "AWS Region"
+  type        = bool
+  default     = false
+}
+
+# list(type): 중복 가능한 여러 데이터를 저장할 수 있는 자료형(변수)
+# set(type): 
+# - 중복 되지 않는 여러 데이터를 저장할 수있는 자료형(변수)
+# - 중복되더라도 에러는 안남/중복되는 값을 제외하고 출력(첫번째 중복값은 출력)
+# - 인덱스 접근 불가능
+
+# variable "subnet_cidr" {
+#   description = "AWS Subnet CIDR"
+#   type        = list(string)
+#   default = [
+#     "10.0.1.0/24",
+#     "10.0.2.0/24",
+#     "10.0.3.0/24"
+#   ]
+# }
+
+variable "subnet_cidr" {
+  description = "AWS Subnet CIDR"
+  type        = list(list(string))
+  default = [
+    ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"],
+    ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
+  ]
+}
+
+# map(type): key-value 쌍으로 데이터를 저장할 수 있는 변수
+variable "tags" {
+  description = "AWS Tags"
+  type        = map(string)
+  default = {
+    Name        = "Terraform-Example"
+    Environment = "Dev"
+  }
+}
+
+# list(map(type)): 중복가능한 여러 key-value 쌍으로 데이터를 저장할 수 있는 변수
+variable "subnet_info" {
+  description = "AWS Subnet Info"
+  type        = list(map(string))
+  default = [
+    {
+      name = "subnet-1"
+      cidr = "10.0.1.0/24"
+    },
+    {
+      name = "subnet-2"
+      cidr = "10.0.2.0/24"
+    }
+  ]
+}
+
+# 구조체: Tuple / Object
+# Tuple
+# - 데이터 유형을 순서대로 정의
+# - 데이터 유형 순서대로 데이터를 정의
+variable "tup" {
+  description = "tuple"
+  type        = tuple([string, number, number, number])
+  default = [
+    "홍길동", 100, 90, 80
+  ]
+}
+# Object: 여러 자료형의 데이터를 맵형태로 저장
+# 권장: default 선언을 하나 이상 할 것/ 그렇지 않으면 변수 초기화 파일에 설정해줘야 함
+# variable "obj" {
+#   type = object({
+#     vpc_id   = string
+#     vpc_cidr = string
+#     tags     = map(string)
+#   })
+#   default = {
+#     vpc_id   = "vpc_123456"
+#     vpc_cidr = ""
+#     tags     = {}
+#   }
+# }
+
+variable "obj" {
+  type = object({
+    vpc_id   = optional(string, "") # optional(type, "초기값")
+    vpc_cidr = optional(string, "")
+  })
+  default = {
+    vpc_id = ""
+  }
+}
+
+# ==================================================================
+# output "출력명" {
+#   description = "설명"
+#   value = "출력값"
+# }
+output "region" {
+  description = "AWS Region"
+  value       = var.region
+}
+
+# output "subnet_cidr" {
+#   description = "AWS subnet CIDR"
+#   value       = var.subnet_cidr
+# }
+
+output "subnet_cidr" {
+  description = "AWS subnet CIDR"
+  value       = tolist(var.subnet_cidr)[1]
+}
+
+output "tags" {
+  description = "AWS Tags"
+  value       = var.tags
+}
+
+output "subnet_info" {
+  description = "AWS_Subnet Info"
+  value       = var.subnet_info[1]
+
+}
+
+output "tup" {
+  description = "tuple"
+  value       = var.tup[0]
+}
+
+output "obj" {
+  description = "object"
+  value       = var.obj
+}
+

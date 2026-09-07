@@ -1,0 +1,395 @@
+# ========================================================
+# VPC 생성
+resource "aws_vpc" "std07_vpc" {
+  cidr_block           = "10.0.0.0/16"
+  instance_tenancy     = "default"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "${local.tag_header}vpc"
+  }
+}
+
+# =======================================================
+# Public Subnet 생성
+
+# 수동
+# resource "aws_subnet" "std07_public_1a_subnet" {
+#   vpc_id            = aws_vpc.std07_vpc.id
+#   cidr_block        = "10.0.1.0/24"
+#   availability_zone = "${var.region}a"
+
+#   # Public Subnet 설정
+#   map_public_ip_on_launch                     = true # 퍼블릭 IPv4 주소 자동 할당
+#   enable_resource_name_dns_a_record_on_launch = true # 리소스 이름 DNS A 레코드
+
+#   tags = {
+#     Name = "${local.tag_header}public-1a-subnet"
+#   }
+# }
+
+# resource "aws_subnet" "std07_public_1b_subnet" {
+#   vpc_id            = aws_vpc.std07_vpc.id
+#   cidr_block        = "10.0.2.0/24"
+#   availability_zone = "${var.region}b"
+
+#   map_public_ip_on_launch                     = true
+#   enable_resource_name_dns_a_record_on_launch = true
+
+#   tags = {
+#     Name = "${local.tag_header}public-1b-subnet"
+#   }
+# }
+
+# resource "aws_subnet" "std07_public_1c_subnet" {
+#   vpc_id            = aws_vpc.std07_vpc.id
+#   cidr_block        = "10.0.3.0/24"
+#   availability_zone = "${var.region}c"
+
+#   map_public_ip_on_launch                     = true
+#   enable_resource_name_dns_a_record_on_launch = true
+
+#   tags = {
+#     Name = "${local.tag_header}public-1c-subnet"
+#   }
+# }
+
+# 자동
+resource "aws_subnet" "std07_public_subnet" {
+  # for_each = toset(local.azs)
+  count             = length(local.azs)
+  vpc_id            = aws_vpc.std07_vpc.id
+  cidr_block        = var.subnet_cidr[0][count.index]
+  availability_zone = local.azs[count.index]
+
+  # Public Subnet 설정
+  map_public_ip_on_launch                     = true # 퍼블릭 IPv4 주소 자동 할당
+  enable_resource_name_dns_a_record_on_launch = true # 리소스 이름 DNS A 레코드
+
+  tags = {
+    Name = "${local.tag_header}public-${local.azs[count.index]}-subnet"
+  }
+}
+
+# =========================================================
+# Private Subnet 생성
+
+# 수동
+# resource "aws_subnet" "std07_private_1a_subnet" {
+#   vpc_id            = aws_vpc.std07_vpc.id
+#   cidr_block        = "10.0.11.0/24"
+#   availability_zone = "${var.region}a"
+
+#   tags = {
+#     Name = "${local.tag_header}private-1a-subnet"
+#   }
+# }
+
+# resource "aws_subnet" "std07_private_1b_subnet" {
+#   vpc_id            = aws_vpc.std07_vpc.id
+#   cidr_block        = "10.0.12.0/24"
+#   availability_zone = "${var.region}b"
+
+#   tags = {
+#     Name = "${local.tag_header}private-1b-subnet"
+#   }
+# }
+
+# resource "aws_subnet" "std07_private_1c_subnet" {
+#   vpc_id            = aws_vpc.std07_vpc.id
+#   cidr_block        = "10.0.13.0/24"
+#   availability_zone = "${var.region}c"
+
+#   tags = {
+#     Name = "${local.tag_header}private-1c-subnet"
+#   }
+# }
+
+# 자동
+resource "aws_subnet" "std07_private_subnet" {
+  # for_each = toset(local.azs)
+  count             = length(local.azs)
+  vpc_id            = aws_vpc.std07_vpc.id
+  cidr_block        = var.subnet_cidr[1][count.index]
+  availability_zone = local.azs[count.index]
+
+  tags = {
+    Name = "${local.tag_header}private-${local.azs[count.index]}-subnet"
+  }
+}
+
+
+# =========================================================
+# Gateway 생성
+# Internet Gateway 생성
+resource "aws_internet_gateway" "std07_igw" {
+  vpc_id = aws_vpc.std07_vpc.id
+
+  tags = {
+    Name = "${local.tag_header}igw"
+  }
+}
+
+# NAT Gateway 생성을 위한 EIP 생성
+resource "aws_eip" "std07_nat_eip" {
+  domain = "vpc" # VPC용 EIP 생성, std07-nat-eip의 사용범위를 VPC로 제한
+
+  tags = {
+    Name = "${local.tag_header}nat-eip"
+  }
+}
+# NAT Gateway 생성
+resource "aws_nat_gateway" "std07_nat_gw" {
+  allocation_id = aws_eip.std07_nat_eip.id
+  # NAT Gateway를 생성할 Public Subnet 지정
+  subnet_id  = aws_subnet.std07_public_subnet[0].id
+  depends_on = [aws_internet_gateway.std07_igw] # NAT Gateway 생성 시점에 IGW가 생성되어 있으면 생성/의존성
+  tags = {
+    Name = "${local.tag_header}nat-gw"
+  }
+}
+# =========================================================
+# Route Table 생성
+# public Route Table 생성
+# 1. 생성
+resource "aws_route_table" "std07_public_rt" {
+  vpc_id = aws_vpc.std07_vpc.id
+
+  tags = {
+    Name = "${local.tag_header}pulic-rt"
+  }
+}
+
+# 2. 서브넷 연결
+resource "aws_route_table_association" "std07_public_rt_association" {
+  count          = length(local.azs)
+  subnet_id      = aws_subnet.std07_public_subnet[count.index].id
+  route_table_id = aws_route_table.std07_public_rt.id
+}
+
+# resource "aws_route_table_association" "std07_public_rt_association" {
+#   for_each = {
+#     "ap-southeast-1a" = aws_subnet.std07_public_subnet[0].id
+#     "ap-southeast-1b" = aws_subnet.std07_public_subnet[1].id
+#     "ap-southeast-1c" = aws_subnet.std07_public_subnet[2].id
+#   }
+#   subnet_id      = each.value
+#   route_table_id = aws_route_table.std07_public_rt.id
+# }
+
+# resource "aws_route_table_association" "std07_public_1a_rt_association" {
+#   subnet_id      = aws_subnet.std07_public_1a_subnet.id
+#   route_table_id = aws_route_table.std07_public_rt.id
+# }
+
+# 3. 라우팅
+resource "aws_route" "std07_public_rt_route" {
+  route_table_id         = aws_route_table.std07_public_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.std07_igw.id
+}
+
+# =========================================================
+# # private Route Table 생성
+resource "aws_route_table" "std07_private_rt" {
+  count  = length(local.azs)
+  vpc_id = aws_vpc.std07_vpc.id
+
+  tags = {
+    Name = "${local.tag_header}private-${local.azs[count.index]}-rt"
+  }
+}
+# resource "aws_route_table" "std07_private_1a_rt" {
+#   vpc_id = aws_vpc.std07_vpc.id
+
+#   tags = {
+#     Name = "${local.tag_header}private-1a-rt"
+#   }
+# }
+# resource "aws_route_table" "std07_private_1b_rt" {
+#   vpc_id = aws_vpc.std07_vpc.id
+
+#   tags = {
+#     Name = "${local.tag_header}private-1b-rt"
+#   }
+# }
+# resource "aws_route_table" "std07_private_1c_rt" {
+#   vpc_id = aws_vpc.std07_vpc.id
+
+#   tags = {
+#     Name = "${local.tag_header}private-1c-rt"
+#   }
+# }
+
+# 2. 서브넷 연결
+resource "aws_route_table_association" "std07_private_rt_association" {
+  count          = length(local.azs)
+  subnet_id      = aws_subnet.std07_private_subnet[count.index].id
+  route_table_id = aws_route_table.std07_private_rt[count.index].id
+}
+# resource "aws_route_table_association" "std07_private_1a_rt_association" {
+
+#   subnet_id      = aws_subnet.std07_private_subnet[0].id
+#   route_table_id = aws_route_table.std07_private_1a_rt.id
+# }
+# resource "aws_route_table_association" "std07_private_1b_rt_association" {
+
+#   subnet_id      = aws_subnet.std07_private_subnet[1].id
+#   route_table_id = aws_route_table.std07_private_1b_rt.id
+# }
+# resource "aws_route_table_association" "std07_private_1c_rt_association" {
+
+#   subnet_id      = aws_subnet.std07_private_subnet[2].id
+#   route_table_id = aws_route_table.std07_private_1c_rt.id
+# }
+
+# 3. 라우팅
+resource "aws_route" "std07_private_rt_route" {
+  count                  = length(local.azs)
+  route_table_id         = aws_route_table.std07_private_rt[count.index].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_nat_gateway.std07_nat_gw.id
+}
+# resource "aws_route" "std07_private_1a_rt_route" {
+#   route_table_id         = aws_route_table.std07_private_1a_rt.id
+#   destination_cidr_block = "0.0.0.0/0"
+#   gateway_id             = aws_nat_gateway.std07_nat_gw.id
+# }
+# resource "aws_route" "std07_private_1b_rt_route" {
+#   route_table_id         = aws_route_table.std07_private_1b_rt.id
+#   destination_cidr_block = "0.0.0.0/0"
+#   gateway_id             = aws_nat_gateway.std07_nat_gw.id
+# }
+# resource "aws_route" "std07_private_1c_rt_route" {
+#   route_table_id         = aws_route_table.std07_private_1c_rt.id
+#   destination_cidr_block = "0.0.0.0/0"
+#   gateway_id             = aws_nat_gateway.std07_nat_gw.id
+# }
+
+# =========================================================
+# Security Group 생성
+
+# SSH 접속용
+resource "aws_security_group" "std07_ssh_sg" {
+  name        = "${local.tag_header}ssh-sg"
+  description = "Allow SSH inbound traffic" # 설명란
+  vpc_id      = aws_vpc.std07_vpc.id
+
+  ingress {          # inbound 규칙
+    from_port   = 22 # 시작포트 번호
+    to_port     = 22 # 종료포트 번호 (22~22)
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress { # outbound 규칙
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${local.tag_header}ssh-sg"
+  }
+}
+
+# alb 접속용
+resource "aws_security_group" "std07_external_alb_sg" {
+  name        = "${local.tag_header}external-alb-sg"
+  description = "Allow External ALB inbound traffic"
+  vpc_id      = aws_vpc.std07_vpc.id
+
+  ingress { # inbound 규칙
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress { # inbound 규칙
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress { # outbound 규칙
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${local.tag_header}external-alb-sg"
+  }
+}
+
+# 프라이빗 웹 인스턴스용 보안그룹
+resource "aws_security_group" "std07_internal_alb_sg" {
+  name        = "${local.tag_header}internal-alb-sg"
+  description = "Allow Internal ALB inbound traffic"
+  vpc_id      = aws_vpc.std07_vpc.id
+
+  egress { # outbound 규칙
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${local.tag_header}internal-alb-sg"
+  }
+}
+
+# MySQL 접속용
+resource "aws_security_group" "std07_mysql_sg" {
+  name        = "${local.tag_header}mysql-sg"
+  description = "Allow MySQL inbound traffic"
+  vpc_id      = aws_vpc.std07_vpc.id
+
+  ingress { # inbound 규칙
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress { # outbound 규칙
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${local.tag_header}mysql-sg"
+  }
+}
+
+# 내부만 허용하는 Mysql 보안그룹 생성
+resource "aws_security_group" "std07_internal_mysql_sg" {
+  name        = "${local.tag_header}internal-mysql-sg"
+  description = "Allow internal MySQL inbound traffic"
+  vpc_id      = aws_vpc.std07_vpc.id
+
+  egress { # outbound 규칙
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${local.tag_header}internal-mysql-sg"
+  }
+}
+
+# 내부 ALB에서 MySQL로 트래픽 허용 규칙 추가
+resource "aws_security_group_rule" "std07_internal_mysql_rule" {
+  type      = "ingress"
+  from_port = 3306
+  to_port   = 3306
+  protocol  = "tcp"
+  # 규칙을 추가할 보안 그룹의 아이디
+  security_group_id = aws_security_group.std07_internal_mysql_sg.id
+  # 소스로 어떤 보안 그룹을 추가할지 추가할 보안 그룹의 아이디
+  source_security_group_id = aws_security_group.std07_internal_alb_sg.id
+}
