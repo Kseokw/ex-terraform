@@ -1,0 +1,44 @@
+# terraform.tfstate (설계도와 실제 AWS 리소스의 매칭 정보)를 s3에 저장
+# 내 컴퓨터가 아닌 다른 컴퓨터에서 할 때 해당 파일을 보고 작업을 하는데,
+# 새 컴퓨터에서 하면 작업 기록이 없으니 이미 AWS에는 만들어둔 리소스들을 새로 만들려고 함(이름 충돌)
+
+# 상태값 저장을 위한 s3 bucket 생성
+# 기존에 사용하던 버킷을 사용하면 리소스 생성 필요 없음
+# 항상 상태값을 기준으로 init가 우선
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "std07-ex-terraform-state-bucket"
+
+  lifecycle {
+    prevent_destroy = true #삭제 방지
+  }
+
+  tags = {
+    Name = "std07-ex-terraform-state-bucket"
+  }
+}
+# 상태 복구를 위한 버전 관리 활성화(상태 복구용)
+# 상태값 사라지면 그 이전 버전으로 활성화 됨
+resource "aws_s3_bucket_versioning" "state_versioning" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# 상태 잠금용 DynamoDB 테이블 생성
+resource "aws_dynamodb_table" "terraform_lock" {
+  name = "std07-lab-lock-table"
+  # Dynamodb의 관리 방식(비용과 연관된 설정)
+  billing_mode = "PROVISIONED" # PAT_PER_REQUEST
+  hash_key     = "LockID"      # 관계형 DB의 Primary key 역할
+
+  read_capacity  = 20 # 초당 4KB 데이터 읽기(RCU) => 1RCU
+  write_capacity = 20 # 초당 4KB 데이터 쓰기(WCU) => 1WCU
+
+
+  attribute {
+    name = "LockID" # 관계형 데이터베이스의 P/K와 같은 역할 # 관계형 DB의 속성 역할)
+    type = "S"      # S(String), N(Number), B(Binary)
+  }
+}

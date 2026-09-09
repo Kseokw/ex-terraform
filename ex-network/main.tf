@@ -1,3 +1,4 @@
+# VPC 생성
 resource "aws_vpc" "std07_lab_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -8,7 +9,7 @@ resource "aws_vpc" "std07_lab_vpc" {
     Name = "std07-lab-vpc"
   }
 }
-
+# ========================================================================================
 # 퍼블릭 서브넷 생성
 resource "aws_subnet" "std07_lab_public_1a_subnet" {
   vpc_id            = aws_vpc.std07_lab_vpc.id
@@ -24,6 +25,66 @@ resource "aws_subnet" "std07_lab_public_1a_subnet" {
   }
 }
 
+resource "aws_subnet" "std07_lab_public_1b_subnet" {
+  vpc_id            = aws_vpc.std07_lab_vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  # Public Subnet 설정
+  map_public_ip_on_launch                     = true # 퍼블릭 IPv4 주소 자동 할당
+  enable_resource_name_dns_a_record_on_launch = true # 리소스 이름 DNS A 레코드
+
+  tags = {
+    Name = "std07-lab-public-1b-subnet"
+  }
+}
+
+resource "aws_subnet" "std07_lab_public_1c_subnet" {
+  vpc_id            = aws_vpc.std07_lab_vpc.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  # Public Subnet 설정
+  map_public_ip_on_launch                     = true # 퍼블릭 IPv4 주소 자동 할당
+  enable_resource_name_dns_a_record_on_launch = true # 리소스 이름 DNS A 레코드
+
+  tags = {
+    Name = "std07-lab-public-1c-subnet"
+  }
+}
+# ========================================================================================
+# private 서브넷 생성
+resource "aws_subnet" "std07_lab_priv_1a_subnet" {
+  vpc_id            = aws_vpc.std07_lab_vpc.id
+  cidr_block        = "10.0.11.0/24"
+  availability_zone = "ap-southeast-1a"
+
+  tags = {
+    Name = "std07-lab-priv-1a-subnet"
+  }
+}
+
+resource "aws_subnet" "std07_lab_priv_1b_subnet" {
+  vpc_id            = aws_vpc.std07_lab_vpc.id
+  cidr_block        = "10.0.12.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  tags = {
+    Name = "std07-lab-priv-1b-subnet"
+  }
+}
+
+resource "aws_subnet" "std07_lab_priv_1c_subnet" {
+  vpc_id            = aws_vpc.std07_lab_vpc.id
+  cidr_block        = "10.0.13.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  tags = {
+    Name = "std07-lab-priv-1c-subnet"
+  }
+}
+
+# ========================================================================================
 # Internet Gateway 생성
 resource "aws_internet_gateway" "std07_lab_igw" {
   vpc_id = aws_vpc.std07_lab_vpc.id
@@ -52,7 +113,9 @@ resource "aws_nat_gateway" "std07_lab_nat_gw" {
   }
 }
 
-# 라우팅 테이블 생성
+# ========================================================================================
+# 라우팅 테이블 생성 및 게이트웨이 연결
+# public
 resource "aws_route_table" "std07_lab_public_rt" {
   vpc_id = aws_vpc.std07_lab_vpc.id
   route { # 라우팅테이블 생성하면서 라우팅 지정
@@ -64,11 +127,76 @@ resource "aws_route_table" "std07_lab_public_rt" {
   }
 }
 
+# private
+resource "aws_route_table" "std07_private_1a_rt" {
+  vpc_id = aws_vpc.std07_lab_vpc.id
+  route { # 라우팅테이블 생성하면서 라우팅 지정
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.std07_lab_nat_gw.id
+  }
+  tags = {
+    Name = "std07-lab-private-1a-rt"
+  }
+}
+
+resource "aws_route_table" "std07_private_1b_rt" {
+  vpc_id = aws_vpc.std07_lab_vpc.id
+  route { # 라우팅테이블 생성하면서 라우팅 지정
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.std07_lab_nat_gw.id
+  }
+  tags = {
+    Name = "std07-lab-private-1b-rt"
+  }
+}
+
+resource "aws_route_table" "std07_private_1c_rt" {
+  vpc_id = aws_vpc.std07_lab_vpc.id
+  route { # 라우팅테이블 생성하면서 라우팅 지정
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.std07_lab_nat_gw.id
+  }
+  tags = {
+    Name = "std07-lab-private-1c-rt"
+  }
+}
+
+# ========================================================================================
 # 2. 서브넷 연결
+# Public
 resource "aws_route_table_association" "std07_lab_public_rt_association" {
   subnet_id      = aws_subnet.std07_lab_public_1a_subnet.id
   route_table_id = aws_route_table.std07_lab_public_rt.id
 }
+
+resource "aws_route_table_association" "std07_lab_public_1b_rt_association" {
+  subnet_id      = aws_subnet.std07_lab_public_1b_subnet.id
+  route_table_id = aws_route_table.std07_lab_public_rt.id
+}
+
+resource "aws_route_table_association" "std07_lab_public_1c_rt_association" {
+  subnet_id      = aws_subnet.std07_lab_public_1c_subnet.id
+  route_table_id = aws_route_table.std07_lab_public_rt.id
+}
+
+# private
+resource "aws_route_table_association" "std07_private_1a_rt_association" {
+
+  subnet_id      = aws_subnet.std07_lab_priv_1a_subnet.id
+  route_table_id = aws_route_table.std07_private_1a_rt.id
+}
+resource "aws_route_table_association" "std07_private_1b_rt_association" {
+
+  subnet_id      = aws_subnet.std07_lab_priv_1b_subnet.id
+  route_table_id = aws_route_table.std07_private_1b_rt.id
+}
+resource "aws_route_table_association" "std07_private_1c_rt_association" {
+
+  subnet_id      = aws_subnet.std07_lab_priv_1c_subnet.id
+  route_table_id = aws_route_table.std07_private_1c_rt.id
+}
+
+
 
 # 보안그룹 생성
 resource "aws_security_group" "std07_lab_external_alb_sg" {
@@ -94,6 +222,32 @@ resource "aws_security_group" "std07_lab_external_alb_sg" {
   }
   tags = {
     Name = "std07-lab-external-alb-sg"
+  }
+}
+
+resource "aws_security_group" "std07_lab_mysql_sg" {
+  name        = "std07-lab-mysql-sg"
+  description = "Allow MySQL inbound traffic from VPC" # 설명 수정
+  vpc_id      = aws_vpc.std07_lab_vpc.id
+
+  # MySQL 전용 3306 포트 오픈 및 내부 네트워크(VPC)에서만 접근 허용
+  ingress {
+    from_port = 3306
+    to_port   = 3306
+    protocol  = "tcp"
+    # 0.0.0.0/0 대신 현재 생성한 VPC의 CIDR 대역(10.0.0.0/16)만 허용
+    cidr_blocks = [aws_vpc.std07_lab_vpc.cidr_block]
+  }
+
+  egress { # outbound 규칙
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # 모든 프로토콜 허용
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "std07-lab-mysql-sg" # 태그 이름 수정
   }
 }
 
@@ -163,7 +317,19 @@ resource "aws_network_acl" "std07_lab_nacl" {
 }
 
 # NACL - subnet 연결
-resource "aws_network_acl_association" "std07_lab_nacl_assoc" {
+resource "aws_network_acl_association" "std07_lab_nacl_1a_assoc" {
   subnet_id      = aws_subnet.std07_lab_public_1a_subnet.id
+  network_acl_id = aws_network_acl.std07_lab_nacl.id
+}
+
+# NACL - 1b 서브넷 연결 추가
+resource "aws_network_acl_association" "std07_lab_nacl_1b_assoc" {
+  subnet_id      = aws_subnet.std07_lab_public_1b_subnet.id
+  network_acl_id = aws_network_acl.std07_lab_nacl.id
+}
+
+# NACL - 1b 서브넷 연결 추가
+resource "aws_network_acl_association" "std07_lab_nacl_1c_assoc" {
+  subnet_id      = aws_subnet.std07_lab_public_1c_subnet.id
   network_acl_id = aws_network_acl.std07_lab_nacl.id
 }
